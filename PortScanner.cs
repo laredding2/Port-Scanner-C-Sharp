@@ -23,10 +23,12 @@ namespace PortScanner
 
         // Scan tab
         private Label lblTarget, lblPortRange, lblTimeout, lblThreads, lblPreset;
+        private Label lblSubnetMask, lblScanMode;
         private TextBox txtTarget, txtPortStart, txtPortEnd, txtTimeout, txtThreads;
-        private ComboBox cmbPreset;
-        private CheckBox chkResolveHostnames, chkGrabBanners;
-        private Button btnScan, btnStop, btnClear, btnExport;
+        private TextBox txtSubnetMask;
+        private ComboBox cmbPreset, cmbScanMode;
+        private CheckBox chkResolveHostnames, chkGrabBanners, chkPingSweep;
+        private Button btnScan, btnStop, btnClear, btnExport, btnDetectNetwork;
         private ProgressBar progressBar;
         private Label lblStatus, lblProgress;
 
@@ -53,6 +55,9 @@ namespace PortScanner
             { "Full Range (1-65535)", "1-65535" },
         };
 
+        // Scan mode options
+        private static readonly string[] ScanModes = { "Single Host", "CIDR Notation", "Subnet Mask", "Local Network" };
+
         public MainForm()
         {
             InitializeComponent();
@@ -62,8 +67,8 @@ namespace PortScanner
         {
             // ── Form ──
             Text = "Port Scanner";
-            Size = new Size(880, 680);
-            MinimumSize = new Size(780, 580);
+            Size = new Size(900, 750);
+            MinimumSize = new Size(860, 700);
             StartPosition = FormStartPosition.CenterScreen;
             Font = new Font("Segoe UI", 9F);
             Icon = SystemIcons.Shield;
@@ -78,40 +83,82 @@ namespace PortScanner
             // ═══════════════════════════════════════
             //  SCAN TAB
             // ═══════════════════════════════════════
-            var panelTop = new Panel { Dock = DockStyle.Top, Height = 210, Padding = new Padding(12) };
+            var panelTop = new Panel { Dock = DockStyle.Top, Height = 270, Padding = new Padding(12) };
 
-            // Row 1: Target
-            lblTarget = new Label { Text = "Target (IP / Hostname / CIDR):", Location = new Point(12, 14), AutoSize = true };
-            txtTarget = new TextBox { Location = new Point(220, 11), Width = 280, PlaceholderText = "e.g. 192.168.1.1 or 192.168.1.0/24" };
+            int leftCol = 12;
+            int inputCol = 220;
+            int row = 14;
+            int rowHeight = 32;
 
-            // Row 2: Preset
-            lblPreset = new Label { Text = "Port Preset:", Location = new Point(12, 46), AutoSize = true };
-            cmbPreset = new ComboBox { Location = new Point(220, 43), Width = 280, DropDownStyle = ComboBoxStyle.DropDownList };
+            // Row 1: Scan Mode
+            lblScanMode = new Label { Text = "Scan Mode:", Location = new Point(leftCol, row), AutoSize = true };
+            cmbScanMode = new ComboBox { Location = new Point(inputCol, row - 3), Width = 160, DropDownStyle = ComboBoxStyle.DropDownList };
+            foreach (var m in ScanModes) cmbScanMode.Items.Add(m);
+            cmbScanMode.SelectedIndex = 0;
+            cmbScanMode.SelectedIndexChanged += CmbScanMode_Changed;
+
+            btnDetectNetwork = new Button
+            {
+                Text = "Detect My Network",
+                Location = new Point(400, row - 4),
+                Size = new Size(140, 26),
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Color.FromArgb(70, 130, 180),
+                ForeColor = Color.White
+            };
+            btnDetectNetwork.Click += BtnDetectNetwork_Click;
+
+            row += rowHeight;
+
+            // Row 2: Target
+            lblTarget = new Label { Text = "Target (IP / Hostname):", Location = new Point(leftCol, row), AutoSize = true };
+            txtTarget = new TextBox { Location = new Point(inputCol, row - 3), Width = 280, PlaceholderText = "e.g. 192.168.1.1 or 192.168.1.0/24" };
+
+            row += rowHeight;
+
+            // Row 3: Subnet Mask
+            lblSubnetMask = new Label { Text = "Subnet Mask:", Location = new Point(leftCol, row), AutoSize = true };
+            txtSubnetMask = new TextBox { Location = new Point(inputCol, row - 3), Width = 180, Text = "255.255.255.0", PlaceholderText = "e.g. 255.255.255.0", Enabled = false };
+            chkPingSweep = new CheckBox { Text = "Ping sweep first (find live hosts)", Location = new Point(420, row - 2), AutoSize = true, Checked = true };
+
+            row += rowHeight;
+
+            // Row 4: Preset
+            lblPreset = new Label { Text = "Port Preset:", Location = new Point(leftCol, row), AutoSize = true };
+            cmbPreset = new ComboBox { Location = new Point(inputCol, row - 3), Width = 280, DropDownStyle = ComboBoxStyle.DropDownList };
             foreach (var k in Presets.Keys) cmbPreset.Items.Add(k);
             cmbPreset.SelectedIndex = 0;
             cmbPreset.SelectedIndexChanged += CmbPreset_Changed;
 
-            // Row 3: Port range
-            lblPortRange = new Label { Text = "Port Range:", Location = new Point(12, 78), AutoSize = true };
-            txtPortStart = new TextBox { Location = new Point(220, 75), Width = 100, Text = "1" };
-            var lblDash = new Label { Text = "–", Location = new Point(325, 78), AutoSize = true };
-            txtPortEnd = new TextBox { Location = new Point(340, 75), Width = 100, Text = "1024" };
+            row += rowHeight;
 
-            // Row 4: Timeout & Threads
-            lblTimeout = new Label { Text = "Timeout (ms):", Location = new Point(12, 110), AutoSize = true };
-            txtTimeout = new TextBox { Location = new Point(220, 107), Width = 100, Text = "200" };
-            lblThreads = new Label { Text = "Max Threads:", Location = new Point(340, 110), AutoSize = true };
-            txtThreads = new TextBox { Location = new Point(440, 107), Width = 60, Text = "100" };
+            // Row 5: Port range
+            lblPortRange = new Label { Text = "Port Range:", Location = new Point(leftCol, row), AutoSize = true };
+            txtPortStart = new TextBox { Location = new Point(inputCol, row - 3), Width = 100, Text = "1" };
+            var lblDash = new Label { Text = "–", Location = new Point(325, row), AutoSize = true };
+            txtPortEnd = new TextBox { Location = new Point(340, row - 3), Width = 100, Text = "1024" };
 
-            // Row 5: Options
-            chkResolveHostnames = new CheckBox { Text = "Resolve Hostnames", Location = new Point(220, 140), AutoSize = true, Checked = true };
-            chkGrabBanners = new CheckBox { Text = "Grab Banners", Location = new Point(400, 140), AutoSize = true };
+            row += rowHeight;
 
-            // Row 6: Buttons
-            btnScan = new Button { Text = "▶  Start Scan", Location = new Point(220, 170), Size = new Size(120, 30), BackColor = Color.FromArgb(34, 139, 34), ForeColor = Color.White, FlatStyle = FlatStyle.Flat };
-            btnStop = new Button { Text = "■  Stop", Location = new Point(350, 170), Size = new Size(90, 30), Enabled = false, FlatStyle = FlatStyle.Flat };
-            btnClear = new Button { Text = "Clear", Location = new Point(450, 170), Size = new Size(70, 30), FlatStyle = FlatStyle.Flat };
-            btnExport = new Button { Text = "Export CSV", Location = new Point(530, 170), Size = new Size(90, 30), FlatStyle = FlatStyle.Flat };
+            // Row 6: Timeout & Threads
+            lblTimeout = new Label { Text = "Timeout (ms):", Location = new Point(leftCol, row), AutoSize = true };
+            txtTimeout = new TextBox { Location = new Point(inputCol, row - 3), Width = 100, Text = "200" };
+            lblThreads = new Label { Text = "Max Threads:", Location = new Point(340, row), AutoSize = true };
+            txtThreads = new TextBox { Location = new Point(440, row - 3), Width = 60, Text = "100" };
+
+            row += rowHeight;
+
+            // Row 7: Options
+            chkResolveHostnames = new CheckBox { Text = "Resolve Hostnames", Location = new Point(inputCol, row - 2), AutoSize = true, Checked = true };
+            chkGrabBanners = new CheckBox { Text = "Grab Banners", Location = new Point(400, row - 2), AutoSize = true };
+
+            row += rowHeight;
+
+            // Row 8: Buttons
+            btnScan = new Button { Text = "▶  Start Scan", Location = new Point(inputCol, row - 2), Size = new Size(120, 30), BackColor = Color.FromArgb(34, 139, 34), ForeColor = Color.White, FlatStyle = FlatStyle.Flat };
+            btnStop = new Button { Text = "■  Stop", Location = new Point(350, row - 2), Size = new Size(90, 30), Enabled = false, FlatStyle = FlatStyle.Flat };
+            btnClear = new Button { Text = "Clear", Location = new Point(450, row - 2), Size = new Size(70, 30), FlatStyle = FlatStyle.Flat };
+            btnExport = new Button { Text = "Export CSV", Location = new Point(530, row - 2), Size = new Size(90, 30), FlatStyle = FlatStyle.Flat };
 
             btnScan.Click += BtnScan_Click;
             btnStop.Click += BtnStop_Click;
@@ -119,7 +166,10 @@ namespace PortScanner
             btnExport.Click += BtnExport_Click;
 
             panelTop.Controls.AddRange(new Control[] {
-                lblTarget, txtTarget, lblPreset, cmbPreset,
+                lblScanMode, cmbScanMode, btnDetectNetwork,
+                lblTarget, txtTarget,
+                lblSubnetMask, txtSubnetMask, chkPingSweep,
+                lblPreset, cmbPreset,
                 lblPortRange, txtPortStart, lblDash, txtPortEnd,
                 lblTimeout, txtTimeout, lblThreads, txtThreads,
                 chkResolveHostnames, chkGrabBanners,
@@ -170,10 +220,13 @@ namespace PortScanner
             {
                 Dock = DockStyle.Fill,
                 TextAlign = ContentAlignment.MiddleCenter,
-                Text = "Port Scanner v1.0\n\n"
+                Text = "Port Scanner v2.0\n\n"
                      + "A lightweight network port scanner.\n\n"
                      + "Features:\n"
                      + "• Single IP, hostname, or CIDR range scanning\n"
+                     + "• Subnet mask-based network scanning\n"
+                     + "• Auto-detect local network interfaces\n"
+                     + "• Ping sweep to discover live hosts\n"
                      + "• Configurable port ranges & presets\n"
                      + "• Multi-threaded async scanning\n"
                      + "• Banner grabbing\n"
@@ -183,6 +236,158 @@ namespace PortScanner
             tabAbout.Controls.Add(lblAbout);
 
             Controls.Add(tabControl);
+        }
+
+        // ── Scan Mode changed ──
+        private void CmbScanMode_Changed(object sender, EventArgs e)
+        {
+            string mode = cmbScanMode.SelectedItem?.ToString() ?? "";
+            switch (mode)
+            {
+                case "Single Host":
+                    txtSubnetMask.Enabled = false;
+                    chkPingSweep.Enabled = false;
+                    txtTarget.PlaceholderText = "e.g. 192.168.1.1 or scanme.nmap.org";
+                    lblTarget.Text = "Target (IP / Hostname):";
+                    break;
+                case "CIDR Notation":
+                    txtSubnetMask.Enabled = false;
+                    chkPingSweep.Enabled = true;
+                    txtTarget.PlaceholderText = "e.g. 192.168.1.0/24";
+                    lblTarget.Text = "Network (CIDR):";
+                    break;
+                case "Subnet Mask":
+                    txtSubnetMask.Enabled = true;
+                    chkPingSweep.Enabled = true;
+                    txtTarget.PlaceholderText = "e.g. 192.168.1.0 (network address)";
+                    lblTarget.Text = "Network Address:";
+                    break;
+                case "Local Network":
+                    txtSubnetMask.Enabled = false;
+                    chkPingSweep.Enabled = true;
+                    txtTarget.PlaceholderText = "(auto-detected — click Detect My Network)";
+                    lblTarget.Text = "Network:";
+                    DetectAndFillLocalNetwork();
+                    break;
+            }
+        }
+
+        // ── Detect local network ──
+        private void BtnDetectNetwork_Click(object sender, EventArgs e)
+        {
+            DetectAndFillLocalNetwork();
+            cmbScanMode.SelectedIndex = Array.IndexOf(ScanModes, "Subnet Mask");
+        }
+
+        private void DetectAndFillLocalNetwork()
+        {
+            try
+            {
+                var iface = GetBestNetworkInterface();
+                if (iface == null)
+                {
+                    MessageBox.Show("No active network interfaces found.", "Detection Failed",
+                        MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+
+                var uniProps = iface.GetIPProperties().UnicastAddresses
+                    .FirstOrDefault(a => a.Address.AddressFamily == AddressFamily.InterNetwork
+                                     && !IPAddress.IsLoopback(a.Address));
+
+                if (uniProps == null)
+                {
+                    MessageBox.Show("No IPv4 address found on active interface.", "Detection Failed",
+                        MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+
+                var ip = uniProps.Address;
+                var mask = uniProps.IPv4Mask;
+                var networkAddr = GetNetworkAddress(ip, mask);
+
+                txtTarget.Text = networkAddr.ToString();
+                txtSubnetMask.Text = mask.ToString();
+
+                int prefix = SubnetMaskToCidr(mask);
+                uint hostCount = GetHostCount(prefix);
+
+                Log($"[*] Detected interface: {iface.Name} ({iface.Description})");
+                Log($"[*] IP: {ip}, Mask: {mask} (/{prefix}), Network: {networkAddr}, Hosts: {hostCount}");
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Detection failed: {ex.Message}", "Error",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        // ── Get the best (non-loopback, operational) network interface ──
+        private NetworkInterface GetBestNetworkInterface()
+        {
+            return NetworkInterface.GetAllNetworkInterfaces()
+                .Where(n => n.OperationalStatus == OperationalStatus.Up
+                         && n.NetworkInterfaceType != NetworkInterfaceType.Loopback
+                         && n.NetworkInterfaceType != NetworkInterfaceType.Tunnel
+                         && n.GetIPProperties().UnicastAddresses
+                             .Any(a => a.Address.AddressFamily == AddressFamily.InterNetwork
+                                    && !IPAddress.IsLoopback(a.Address)))
+                .OrderByDescending(n => n.Speed)
+                .FirstOrDefault();
+        }
+
+        // ── Compute network address from IP and mask ──
+        private static IPAddress GetNetworkAddress(IPAddress address, IPAddress subnetMask)
+        {
+            byte[] ipBytes = address.GetAddressBytes();
+            byte[] maskBytes = subnetMask.GetAddressBytes();
+            byte[] networkBytes = new byte[4];
+            for (int i = 0; i < 4; i++)
+                networkBytes[i] = (byte)(ipBytes[i] & maskBytes[i]);
+            return new IPAddress(networkBytes);
+        }
+
+        // ── Convert subnet mask to CIDR prefix length ──
+        private static int SubnetMaskToCidr(IPAddress subnetMask)
+        {
+            byte[] bytes = subnetMask.GetAddressBytes();
+            int cidr = 0;
+            foreach (byte b in bytes)
+            {
+                byte val = b;
+                while (val > 0)
+                {
+                    cidr += val & 1;
+                    val >>= 1;
+                }
+            }
+            return cidr;
+        }
+
+        // ── Convert CIDR prefix to subnet mask ──
+        private static IPAddress CidrToSubnetMask(int prefix)
+        {
+            uint mask = prefix == 0 ? 0 : 0xFFFFFFFF << (32 - prefix);
+            byte[] bytes = BitConverter.GetBytes(mask);
+            if (BitConverter.IsLittleEndian) Array.Reverse(bytes);
+            return new IPAddress(bytes);
+        }
+
+        // ── Get host count from prefix ──
+        private static uint GetHostCount(int prefix)
+        {
+            if (prefix >= 31) return (uint)(prefix == 31 ? 2 : 1);
+            return (uint)((1L << (32 - prefix)) - 2);
+        }
+
+        // ── Validate a subnet mask is contiguous ──
+        private static bool IsValidSubnetMask(IPAddress mask)
+        {
+            uint val = BitConverter.ToUInt32(mask.GetAddressBytes().Reverse().ToArray(), 0);
+            if (val == 0) return true;
+            // A valid mask in binary is all 1s followed by all 0s
+            uint inverted = ~val;
+            return (inverted & (inverted + 1)) == 0;
         }
 
         // ── Preset changed ──
@@ -200,7 +405,6 @@ namespace PortScanner
             }
             else
             {
-                // For comma-separated presets, store in start field and clear end
                 txtPortStart.Text = val;
                 txtPortEnd.Text = "";
             }
@@ -215,7 +419,6 @@ namespace PortScanner
 
             if (startText.Contains(","))
             {
-                // Comma-separated list
                 foreach (var token in startText.Split(','))
                 {
                     string t = token.Trim();
@@ -239,48 +442,186 @@ namespace PortScanner
             return ports.ToList();
         }
 
-        // ── Parse target into IP list (supports CIDR) ──
-        private List<IPAddress> ParseTargets(string target)
+        // ── Parse target into IP list (supports single, CIDR, and subnet mask) ──
+        private List<IPAddress> ParseTargets(string target, string mode)
         {
             var list = new List<IPAddress>();
 
-            if (target.Contains("/"))
+            switch (mode)
             {
-                // CIDR notation
-                var parts = target.Split('/');
-                if (IPAddress.TryParse(parts[0], out var networkAddr) && int.TryParse(parts[1], out int prefix))
-                {
-                    if (prefix < 0 || prefix > 32) throw new ArgumentException("Invalid CIDR prefix.");
-                    uint ip = BitConverter.ToUInt32(networkAddr.GetAddressBytes().Reverse().ToArray(), 0);
-                    uint mask = prefix == 0 ? 0 : 0xFFFFFFFF << (32 - prefix);
-                    uint network = ip & mask;
-                    uint broadcast = network | ~mask;
+                case "Single Host":
+                    if (IPAddress.TryParse(target, out var singleAddr))
+                        list.Add(singleAddr);
+                    else
+                    {
+                        var entry = Dns.GetHostEntry(target);
+                        var ipv4 = entry.AddressList.FirstOrDefault(a => a.AddressFamily == AddressFamily.InterNetwork);
+                        if (ipv4 != null) list.Add(ipv4);
+                        else throw new ArgumentException($"Could not resolve '{target}' to an IPv4 address.");
+                    }
+                    break;
 
-                    // Skip network and broadcast for subnets > /31
-                    uint start = prefix <= 30 ? network + 1 : network;
-                    uint end = prefix <= 30 ? broadcast - 1 : broadcast;
+                case "CIDR Notation":
+                    list = ParseCidr(target);
+                    break;
 
-                    if (end - start > 1024)
-                        throw new ArgumentException("CIDR range too large (max /22 = 1022 hosts). Narrow the range.");
+                case "Subnet Mask":
+                    list = ParseWithSubnetMask(target, txtSubnetMask.Text.Trim());
+                    break;
 
-                    for (uint i = start; i <= end; i++)
-                        list.Add(new IPAddress(BitConverter.GetBytes(i).Reverse().ToArray()));
-                }
-            }
-            else
-            {
-                // Single IP or hostname
-                if (IPAddress.TryParse(target, out var addr))
-                    list.Add(addr);
-                else
-                {
-                    var entry = Dns.GetHostEntry(target);
-                    if (entry.AddressList.Length > 0)
-                        list.Add(entry.AddressList.First(a => a.AddressFamily == AddressFamily.InterNetwork));
-                }
+                case "Local Network":
+                    list = ParseWithSubnetMask(target, txtSubnetMask.Text.Trim());
+                    break;
+
+                default:
+                    // Fallback: auto-detect format
+                    if (target.Contains("/"))
+                        list = ParseCidr(target);
+                    else if (IPAddress.TryParse(target, out var fallbackAddr))
+                        list.Add(fallbackAddr);
+                    else
+                    {
+                        var entry = Dns.GetHostEntry(target);
+                        if (entry.AddressList.Length > 0)
+                            list.Add(entry.AddressList.First(a => a.AddressFamily == AddressFamily.InterNetwork));
+                    }
+                    break;
             }
 
             return list;
+        }
+
+        // ── Parse CIDR notation ──
+        private List<IPAddress> ParseCidr(string target)
+        {
+            if (!target.Contains("/"))
+                throw new ArgumentException("CIDR notation requires '/' (e.g. 192.168.1.0/24).");
+
+            var parts = target.Split('/');
+            if (!IPAddress.TryParse(parts[0], out var networkAddr) || !int.TryParse(parts[1], out int prefix))
+                throw new ArgumentException("Invalid CIDR format. Use e.g. 192.168.1.0/24.");
+
+            if (prefix < 0 || prefix > 32)
+                throw new ArgumentException("CIDR prefix must be between 0 and 32.");
+
+            return GenerateHostRange(networkAddr, prefix);
+        }
+
+        // ── Parse with an explicit subnet mask ──
+        private List<IPAddress> ParseWithSubnetMask(string target, string maskStr)
+        {
+            if (!IPAddress.TryParse(target, out var baseAddr))
+                throw new ArgumentException($"Invalid IP address: '{target}'.");
+
+            if (!IPAddress.TryParse(maskStr, out var mask))
+                throw new ArgumentException($"Invalid subnet mask: '{maskStr}'.");
+
+            if (!IsValidSubnetMask(mask))
+                throw new ArgumentException($"'{maskStr}' is not a valid contiguous subnet mask.");
+
+            int prefix = SubnetMaskToCidr(mask);
+            var networkAddr = GetNetworkAddress(baseAddr, mask);
+
+            return GenerateHostRange(networkAddr, prefix);
+        }
+
+        // ── Generate all host IPs in a network given prefix length ──
+        private List<IPAddress> GenerateHostRange(IPAddress networkAddr, int prefix)
+        {
+            var list = new List<IPAddress>();
+
+            uint ip = BitConverter.ToUInt32(networkAddr.GetAddressBytes().Reverse().ToArray(), 0);
+            uint mask = prefix == 0 ? 0 : 0xFFFFFFFF << (32 - prefix);
+            uint network = ip & mask;
+            uint broadcast = network | ~mask;
+
+            // Skip network and broadcast for subnets > /31
+            uint start = prefix <= 30 ? network + 1 : network;
+            uint end = prefix <= 30 ? broadcast - 1 : broadcast;
+
+            uint hostCount = end - start + 1;
+
+            if (hostCount > 65534)
+                throw new ArgumentException($"Network too large ({hostCount} hosts, /{prefix}). Maximum supported is /16 (65,534 hosts).");
+
+            if (hostCount > 1024)
+            {
+                var answer = MessageBox.Show(
+                    $"This will scan {hostCount} hosts (/{prefix}).\n\n"
+                    + "Large scans may take a long time. Consider enabling 'Ping sweep first' to skip offline hosts.\n\n"
+                    + "Continue?",
+                    "Large Network Scan",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Warning);
+                if (answer != DialogResult.Yes)
+                    throw new OperationCanceledException("Scan cancelled by user.");
+            }
+
+            for (uint i = start; i <= end; i++)
+                list.Add(new IPAddress(BitConverter.GetBytes(i).Reverse().ToArray()));
+
+            return list;
+        }
+
+        // ── Ping Sweep: find live hosts ──
+        private async Task<List<IPAddress>> PingSweep(List<IPAddress> hosts, int timeoutMs, CancellationToken token)
+        {
+            var liveHosts = new ConcurrentBag<IPAddress>();
+            int total = hosts.Count;
+            int checked_ = 0;
+
+            BeginInvoke((Action)(() =>
+            {
+                progressBar.Maximum = total;
+                progressBar.Value = 0;
+                lblProgress.Text = $"Ping sweep: 0/{total}";
+                lblStatus.Text = $" Ping sweeping {total} host(s)...";
+            }));
+
+            Log($"[*] Starting ping sweep of {total} host(s)...");
+
+            var semaphore = new SemaphoreSlim(50);
+            var tasks = hosts.Select(async host =>
+            {
+                if (token.IsCancellationRequested) return;
+                await semaphore.WaitAsync(token);
+                try
+                {
+                    using (var ping = new Ping())
+                    {
+                        try
+                        {
+                            var reply = await ping.SendPingAsync(host, Math.Max(timeoutMs, 500));
+                            if (reply.Status == IPStatus.Success)
+                            {
+                                liveHosts.Add(host);
+                                BeginInvoke((Action)(() =>
+                                    Log($"  [+] {host} is alive ({reply.RoundtripTime}ms)")));
+                            }
+                        }
+                        catch { /* host unreachable */ }
+                    }
+                }
+                finally
+                {
+                    semaphore.Release();
+                    int c = Interlocked.Increment(ref checked_);
+                    BeginInvoke((Action)(() =>
+                    {
+                        if (c <= progressBar.Maximum)
+                            progressBar.Value = c;
+                        lblProgress.Text = $"Ping sweep: {c}/{total} ({liveHosts.Count} alive)";
+                    }));
+                }
+            });
+
+            await Task.WhenAll(tasks);
+
+            var result = liveHosts.OrderBy(ip =>
+                BitConverter.ToUInt32(ip.GetAddressBytes().Reverse().ToArray(), 0)).ToList();
+
+            Log($"[*] Ping sweep complete: {result.Count}/{total} host(s) alive.");
+            return result;
         }
 
         // ── Start Scan ──
@@ -291,22 +632,38 @@ namespace PortScanner
             string target = txtTarget.Text.Trim();
             if (string.IsNullOrEmpty(target))
             {
-                MessageBox.Show("Please enter a target IP or hostname.", "Input Required", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show("Please enter a target IP, hostname, or network address.", "Input Required",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
+            string mode = cmbScanMode.SelectedItem?.ToString() ?? "Single Host";
+
             List<IPAddress> hosts;
-            try { hosts = ParseTargets(target); }
+            try { hosts = ParseTargets(target, mode); }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
             catch (Exception ex)
             {
-                MessageBox.Show($"Invalid target: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show($"Invalid target: {ex.Message}", "Error",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            if (hosts.Count == 0)
+            {
+                MessageBox.Show("No valid hosts resolved.", "Input Error",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
             var ports = ParsePorts();
             if (ports.Count == 0)
             {
-                MessageBox.Show("No valid ports specified.", "Input Required", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show("No valid ports specified.", "Input Required",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
@@ -319,24 +676,46 @@ namespace PortScanner
             while (results.TryTake(out _)) { }
             openPorts = 0;
             scannedPorts = 0;
-            totalPorts = hosts.Count * ports.Count;
 
             lvResults.Items.Clear();
             progressBar.Value = 0;
-            progressBar.Maximum = totalPorts;
             btnScan.Enabled = false;
             btnStop.Enabled = true;
-            lblStatus.Text = $" Scanning {hosts.Count} host(s), {ports.Count} port(s)...";
-            Log($"[*] Scan started: {hosts.Count} host(s), {ports.Count} port(s), timeout={timeout}ms, threads={maxThreads}");
 
             bool resolve = chkResolveHostnames.Checked;
             bool banners = chkGrabBanners.Checked;
+            bool pingSweep = chkPingSweep.Checked && chkPingSweep.Enabled && hosts.Count > 1;
             var token = cts.Token;
 
             var sw = System.Diagnostics.Stopwatch.StartNew();
 
             try
             {
+                // ── Ping sweep phase ──
+                if (pingSweep)
+                {
+                    Log($"[*] Phase 1: Ping sweep of {hosts.Count} host(s)");
+                    hosts = await PingSweep(hosts, timeout, token);
+
+                    if (hosts.Count == 0)
+                    {
+                        Log("[!] No live hosts found. Scan complete.");
+                        MessageBox.Show("No live hosts were found during the ping sweep.\n\n"
+                            + "Try unchecking 'Ping sweep first' — some hosts block ICMP.",
+                            "No Hosts Found", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        goto ScanDone;
+                    }
+
+                    Log($"[*] Phase 2: Port scanning {hosts.Count} live host(s)");
+                }
+
+                totalPorts = hosts.Count * ports.Count;
+                progressBar.Maximum = totalPorts;
+                progressBar.Value = 0;
+                lblStatus.Text = $" Scanning {hosts.Count} host(s), {ports.Count} port(s)...";
+                Log($"[*] Port scan started: {hosts.Count} host(s), {ports.Count} port(s), timeout={timeout}ms, threads={maxThreads}");
+
+                // ── Port scan phase ──
                 var semaphore = new SemaphoreSlim(maxThreads);
                 var tasks = new List<Task>();
 
@@ -373,15 +752,16 @@ namespace PortScanner
                 Log($"[!] Error: {ex.Message}");
             }
 
+        ScanDone:
             sw.Stop();
             isScanning = false;
             btnScan.Enabled = true;
             btnStop.Enabled = false;
             progressBar.Value = progressBar.Maximum;
-            string summary = $" Done — {openPorts} open port(s) found in {sw.Elapsed.TotalSeconds:F1}s";
+            string summary = $" Done — {openPorts} open port(s) found across {hosts.Count} host(s) in {sw.Elapsed.TotalSeconds:F1}s";
             lblStatus.Text = summary;
             lblProgress.Text = $"{scannedPorts}/{totalPorts} complete";
-            Log($"[*] Scan finished: {openPorts} open, {sw.Elapsed.TotalSeconds:F1}s elapsed.");
+            Log($"[*] Scan finished: {openPorts} open port(s), {sw.Elapsed.TotalSeconds:F1}s elapsed.");
         }
 
         // ── Scan a single port ──
@@ -409,7 +789,6 @@ namespace PortScanner
                             {
                                 var stream = client.GetStream();
                                 stream.ReadTimeout = Math.Min(timeout, 1000);
-                                // Send a basic probe for HTTP
                                 if (port == 80 || port == 8080 || port == 8443 || port == 443)
                                 {
                                     byte[] probe = Encoding.ASCII.GetBytes($"HEAD / HTTP/1.0\r\nHost: {host}\r\n\r\n");
@@ -424,7 +803,7 @@ namespace PortScanner
                                         banner = Encoding.ASCII.GetString(buf, 0, read).Trim().Replace("\r", "").Replace("\n", " ");
                                 }
                             }
-                            catch { /* banner grab failed, that's okay */ }
+                            catch { /* banner grab failed */ }
                         }
                     }
                 }

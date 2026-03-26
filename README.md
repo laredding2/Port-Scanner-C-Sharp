@@ -26,8 +26,8 @@ A lightweight, multi-threaded TCP port scanner with a Windows Forms GUI. Built w
 ### Clone the repo
 
 ```bash
-git clone https://github.com/laredding2/PortScanner.git
-cd PortScanner
+git clone https://github.com/laredding2/Port-Scanner-C-Sharp.git
+cd Port-Scanner-C-Sharp
 ```
 
 ### Build and run

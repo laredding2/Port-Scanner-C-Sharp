@@ -51,7 +51,7 @@ The compiled binary will be in `bin/Release/net10.0-windows/publish/`.
 
 ## Usage
 
-1. **Enter a target** in the top field (or click on 'Detect Network':
+1. **Enter a target** in the top field (or click on 'Detect Network'):
    - Single host: `192.168.1.1` or `myserver.local`
    - Subnet: `192.168.1.0/24` (max /22, or 1022 hosts)
 
